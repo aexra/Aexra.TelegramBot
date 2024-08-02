@@ -1,4 +1,8 @@
 ﻿namespace Aexra.TelegramBot.Core.Helpers;
+
+/// <summary>
+/// Some misc static functions to work with types
+/// </summary>
 public static class TypeHelper
 {
     public static IEnumerable<Type> GetTypesWith<TAttribute>(bool inherit) where TAttribute : Attribute

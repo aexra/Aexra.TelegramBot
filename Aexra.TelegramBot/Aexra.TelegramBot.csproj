@@ -5,9 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Title>Aexra.TelegramBot</Title>
-    <RepositoryType></RepositoryType>
     <RepositoryUrl>https://github.com/aexra/Aexra.TelegramBot.git</RepositoryUrl>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
   <ItemGroup>

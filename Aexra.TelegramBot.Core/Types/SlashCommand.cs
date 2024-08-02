@@ -1,7 +1,11 @@
 ﻿namespace Aexra.TelegramBot.Core.Types;
-internal class SlashCommand
+
+/// <summary>
+/// SlashCommand class for framework usage
+/// </summary>
+public class SlashCommand
 {
-    public string Name { get; set; }
+    public string Command { get; set; }
     public string Description { get; set; }
-    public System.Reflection.MethodInfo Command { get; set; }
+    public System.Reflection.MethodInfo Method { get; set; }
 }

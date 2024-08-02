@@ -8,6 +8,7 @@ using Aexra.TelegramBot.Core.Helpers;
 using Aexra.TelegramBot.Core.Attributes;
 using Aexra.TelegramBot.Core.Extensions;
 using Aexra.TelegramBot.Core.Types;
+using System.Text.RegularExpressions;
 
 namespace Aexra.TelegramBot;
 
@@ -22,43 +23,47 @@ public class Bot
 
     private string _token;
 
-    private ICollection<Type> Contexts;
+    private ICollection<Type> _contexts;
+    private IEnumerable<SlashCommand> _commands;
 
+    /// <summary>
+    /// Framework uses token received from BotFather
+    /// </summary>
+    /// <param name="token"></param>
     public Bot(string token)
     {
         _token = token;
     }
 
+    /// <summary>
+    /// Configures bot options (only receiverOptions for now)
+    /// </summary>
+    /// <param name="receiverOptions"></param>
+    /// <returns></returns>
     public Bot Configure(Action<ReceiverOptions> receiverOptions)
     {
+        receiverOptions.Invoke(_receiverOptions);
         return this;
     }
 
+    /// <summary>
+    /// Scans application assembly to find all classes with ApiContext attribute and its Commands
+    /// </summary>
+    /// <returns></returns>
     public Bot AddMessageContexts()
     {
-        Contexts = new List<Type>();
+        FindApiContexts();
+        FindApiCommands();
 
-        var types = TypeHelper.GetTypesWith<ApiContextAttribute>(false);
-
-        foreach (var contextType in types)
-        {
-            Contexts.Add(contextType);
-        }
-
-        Console.WriteLine($"Detected {types.Count()} context types: {string.Join(", ", types.Select(t => t.Name))}");
-
-        ValidateRoutes();
+        ValidateCommands();
 
         return this; 
     }
 
-    private void ValidateRoutes()
-    {
-        // Проверяем ошибки пересекающихся рутов
-
-        
-    }
-
+    /// <summary>
+    /// Runs bot
+    /// </summary>
+    /// <returns></returns>
     public async Task Run()
     {
         _botClient = new TelegramBotClient(_token);
@@ -75,30 +80,90 @@ public class Bot
         await Task.Delay(-1);
     }
 
-    private IEnumerable<BotCommand> FindBotCommands()
+    /// <summary>
+    /// Find all ApiContexts and save them to list
+    /// </summary>
+    private void FindApiContexts()
     {
-        var commands = new List<BotCommand>();
+        _contexts = new List<Type>();
 
-        foreach (var contextType in Contexts)
+        var types = TypeHelper.GetTypesWith<ApiContextAttribute>(false);
+
+        foreach (var contextType in types)
+        {
+            _contexts.Add(contextType);
+        }
+
+        Console.WriteLine($"Detected {types.Count()} context types: {string.Join(", ", types.Select(t => t.Name))}");
+    }
+
+    /// <summary>
+    /// Find all Commands and save them to list
+    /// </summary>
+    private void FindApiCommands()
+    {
+        _commands = FindSlashCommands();
+    }
+
+    /// <summary>
+    /// Validates all commands name. Throws Exception if command name is not match [a-z0-9]* or found more than once
+    /// </summary>
+    /// <exception cref="Exception"></exception>
+    private void ValidateCommands()
+    {
+        var regex = new Regex("[a-z0-9]*");
+        foreach (var command in _commands)
+        {
+            if (!regex.IsMatch(command.Command))
+            {
+                throw new Exception($"Invalid command name \"{command.Command}\"");
+            }
+        }
+
+        if (_commands.Select(c => c.Command).ToHashSet().Count != _commands.Count())
+        {
+            throw new Exception($"Found two or more commands with the same name");
+        }
+
+        Console.WriteLine($"Detected commands ({_commands.Count()}):\n{string.Join("\n", _commands.Select(c => "/" + c.Command))}");
+    }
+
+    /// <summary>
+    /// Scans ApiContexts for SlashCommands and returns them
+    /// </summary>
+    /// <returns></returns>
+    private IEnumerable<SlashCommand> FindSlashCommands()
+    {
+        var commands = new List<SlashCommand>();
+
+        foreach (var contextType in _contexts)
         {
             foreach (var method in contextType.GetMethodsWith<SlashCommandAttribute>())
             {
                 var slashAttr = method.GetCustomAttributes(typeof(SlashCommandAttribute), false).First() as SlashCommandAttribute;
-                commands.Add(new BotCommand() { Command = slashAttr.Name, Description = slashAttr.Description });
+                commands.Add(new SlashCommand() { Command = slashAttr.Command, Description = slashAttr.Description, Method = method });
             }
         }
 
         return commands;
     }
 
+    /// <summary>
+    /// Sends info about bot commands to Telegram to help autofill them in chats
+    /// </summary>
+    /// <returns></returns>
     private async Task SyncCommandsAsync()
     {
-        var commands = FindBotCommands();
-        await _botClient.SetMyCommandsAsync(commands);
-
-        Console.WriteLine($"Detected commands ({commands.Count()}):\n{string.Join("\n", commands.Select(c => "/" + c.Command))}");
+        await _botClient.SetMyCommandsAsync(_commands.Select(c => new BotCommand() { Command = c.Command, Description = c.Description }));
     }
 
+    /// <summary>
+    /// Telegram.Bot update handler 
+    /// </summary>
+    /// <param name="botClient"></param>
+    /// <param name="update"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
     private async Task UpdateHandler(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
     {
         try
@@ -116,19 +181,23 @@ public class Bot
         }
     }
 
+    /// <summary>
+    /// MessageReceived event handler that makes all the context instantiation and command call work
+    /// </summary>
+    /// <param name="botClient"></param>
+    /// <param name="update"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
     private async Task MessageReceived(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
     {
-        Console.WriteLine("Пришло сообщение!");
-        Console.WriteLine(update.Message?.Text);
-
-        // Находим контекст с нужным методом
-        foreach (var contextType in Contexts)
+        // Find context with the right method
+        foreach (var contextType in _contexts)
         {
             var methods = contextType.GetMethodsWith<SlashCommandAttribute>();
             foreach (var method in methods) 
             {
                 var slashAttr = method.GetCustomAttributes(typeof(SlashCommandAttribute), false).First() as SlashCommandAttribute;
-                if (update.Message.Text.StartsWith("/" + slashAttr.Name))
+                if (update.Message.Text.StartsWith("/" + slashAttr.Command))
                 {
                     var obj = (MessageContextBase)Activator.CreateInstance(contextType);
                     obj.BotClient = botClient;
@@ -143,6 +212,13 @@ public class Bot
         }
     }
 
+    /// <summary>
+    /// Telegram.Bot error handler 
+    /// </summary>
+    /// <param name="botClient"></param>
+    /// <param name="error"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
     private Task ErrorHandler(ITelegramBotClient botClient, Exception error, CancellationToken cancellationToken)
     {
         var ErrorMessage = error switch
