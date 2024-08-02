@@ -69,9 +69,9 @@ internal class EchoMessageContext : MessageContextBase
 > [!NOTE]
 > Every command must have a unique name and fit regex ```[a-z0-9]*```
 
-You must call AddMessageContexts method on bot to use them:
+You must call ```AddMessageContexts``` method on bot to use them:
 
-```
+```cs
 var bot = new Bot("YOUR_BOT_TOKEN")
     .AddMessageContexts();
 ```
