@@ -78,13 +78,17 @@ var bot = new Bot("YOUR_BOT_TOKEN")
 
 ### Sample
 
-Sample bot configure looks like this:
+Sample bot configuration & startup script looks like this:
 
 ```cs
+using Aexra.TelegramBot;
+
 var bot = new Bot("YOUR_BOT_TOKEN")
     .Configure(options =>
     {
         options.ThrowPendingUpdates = false;
     })
     .AddMessageContexts();
+
+await bot.Run();
 ```
