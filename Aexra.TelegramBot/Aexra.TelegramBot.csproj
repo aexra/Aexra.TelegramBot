@@ -7,7 +7,7 @@
     <Title>Aexra.TelegramBot</Title>
     <RepositoryUrl>https://github.com/aexra/Aexra.TelegramBot.git</RepositoryUrl>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
